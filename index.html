@@ -6,6 +6,7 @@
     <title>WARP WireGuard Config Generator</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/corsfix@2.1.0/corsfix.js"></script>
     <style>
         :root {
             --pico-font-size: 16px;
@@ -190,9 +191,25 @@
 
     <script src="wireguard.js"></script>
     <script>
-        //const CORS_PROXY = 'https://corsproxy.io/?';
-        const CORS_PROXY = 'https://proxy.corsfix.com/?';
         const WARP_API = 'https://api.cloudflareclient.com/v0a737/reg';
+
+        // Optional: your own CORS proxy base URL; must accept ?url=<encoded target>.
+        // Set this (e.g. a Cloudflare Worker) to bypass the free-tier limits of the default proxy.
+        const SELF_PROXY = '';
+
+        // Transport for the cross-origin call to the WARP API:
+        //   1. SELF_PROXY when configured
+        //   2. Corsfix SDK (free tier, no registration required)
+        //   3. Direct Corsfix proxy URL (works on localhost / registered domains)
+        function proxyFetch(url, init) {
+            if (SELF_PROXY) {
+                return fetch(SELF_PROXY + encodeURIComponent(url), init);
+            }
+            if (window.corsfix && typeof window.corsfix.fetch === 'function') {
+                return window.corsfix.fetch(url, init);
+            }
+            return fetch('https://proxy.corsfix.com/?url=' + encodeURIComponent(url), init);
+        }
 
         const generateBtn = document.getElementById('generateBtn');
         const copyBtn = document.getElementById('copyBtn');
@@ -268,7 +285,7 @@
                 locale: options.locale
             };
 
-            const response = await fetch(CORS_PROXY + WARP_API, {
+            const response = await proxyFetch(WARP_API, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -276,10 +293,10 @@
                 body: JSON.stringify(payload)
             });
 
-            const data = await response.json();
+            const data = await response.json().catch(() => ({}));
 
             if (!response.ok || data.success === false) {
-                const errorMsg = data.errors?.[0]?.message || data.error?.message || 'Unknown error';
+                const errorMsg = data.errors?.[0]?.message || data.error?.message || data.message || `HTTP ${response.status}`;
                 throw new Error(`API Error: ${errorMsg}`);
             }
 
@@ -335,7 +352,7 @@ Endpoint = ${peer.endpoint.host}`;
                 configOutput.value = config;
                 outputSection.classList.remove('hidden');
             } catch (err) {
-                showError(err.message);
+                showError(err && err.name === 'CorsfixError' ? `Proxy error: ${err.message}` : err.message);
                 outputSection.classList.add('hidden');
             } finally {
                 generateBtn.disabled = false;
