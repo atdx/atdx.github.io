@@ -22,6 +22,16 @@ Based on [lanrat/wireguard-warp-generator](https://github.com/lanrat/wireguard-w
 
 The private key is generated locally and never transmitted anywhere; only the public key is sent to Cloudflare.
 
+## CORS proxy
+
+`api.cloudflareclient.com` does not send CORS headers, so the page reaches it through the
+[Corsfix](https://corsfix.com) proxy, loaded via their free-tier SDK (`corsfix.js` from jsDelivr).
+The free tier allows 10 MB/month per domain (100 MB when registered) and 60 requests/minute.
+
+To bypass those limits, self-host a proxy (e.g. a small Cloudflare Worker that forwards requests to
+`api.cloudflareclient.com` and adds CORS headers for `https://atdx.github.io`), then set
+`SELF_PROXY` in `index.html` to your proxy base URL (must accept `?url=<encoded target>`).
+
 ## Local preview
 
 Serve this folder with any static file server, e.g.:
